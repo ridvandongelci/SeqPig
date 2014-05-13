@@ -19,3 +19,4 @@ release_commands.txt
 *.xref
 *.4ct
 *.bak
+/bin-eclipse
