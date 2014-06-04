@@ -17,9 +17,9 @@
 
 	<path id="classpath">
 		<fileset dir="${lib.dir}" includes="**/*.jar"/>
-		<fileset id="hadoop_jars" dir="${env.HADOOP_HOME}/share/hadoop/common">
+		<fileset id="hadoop_jars" dir="${env.HADOOP_HOME}">
 			<include name="hadoop-*.jar"/>
-			<include name="lib/*.jar"/>
+			<include name="client/*.jar"/>
 		</fileset>
 		<fileset id="pig_jars" dir="${env.PIG_HOME}">
 			<include name="pig*.jar"/>
@@ -64,7 +64,7 @@
 				<attribute name="Main-Class" value="${main.class}"/>
 			</manifest>
 
-			<zipfileset src="${lib.dir}/hadoop-bam*.jar" includes="**/*.java **/*.class"/>
+			<zipfileset src="${lib.dir}/hadoop-bam.jar" includes="**/*.java **/*.class"/>
 			<zipfileset src="${lib.dir}/seal.jar" includes="**/*.java **/*.class"/>
 			<zipfileset src="${lib.dir}/picard-*.jar" includes="**/*.java **/*.class"/>
 			<zipfileset src="${lib.dir}/samtools*.jar" includes="**/*.java **/*.class"/>
