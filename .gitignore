@@ -20,3 +20,6 @@ release_commands.txt
 *.4ct
 *.bak
 /bin-eclipse
+/.project
+/.externalToolBuilders/
+/.settings/
