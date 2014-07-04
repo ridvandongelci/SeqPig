@@ -20,47 +20,42 @@
 
 package fi.aalto.seqpig.io;
 
-import org.apache.pig.LoadFunc;
-import org.apache.pig.data.TupleFactory;
-import org.apache.pig.data.Tuple; 
-import org.apache.pig.data.DataByteArray;
-import org.apache.pig.backend.executionengine.ExecException;
-import org.apache.pig.PigException;
-import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.PigSplit;
-import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.PigTextInputFormat;
-import org.apache.pig.impl.util.UDFContext;
-import org.apache.pig.ResourceSchema;
-import org.apache.pig.ResourceSchema.ResourceFieldSchema;
-import org.apache.pig.ResourceStatistics;
-import org.apache.pig.LoadMetadata;
-import org.apache.pig.data.DataType;
-import org.apache.pig.Expression;
-import org.apache.pig.impl.logicalLayer.schema.Schema;
+import java.io.IOException;
+import java.io.Serializable;
+import java.util.ArrayList;
 
-import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.io.Text;
+import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapreduce.InputFormat;
 import org.apache.hadoop.mapreduce.Job;
-import org.apache.hadoop.mapreduce.RecordReader; 
+import org.apache.hadoop.mapreduce.RecordReader;
 import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
-import org.apache.hadoop.io.Text;
+import org.apache.pig.Expression;
+import org.apache.pig.LoadFunc;
+import org.apache.pig.LoadMetadata;
+import org.apache.pig.PigException;
+import org.apache.pig.ResourceSchema;
+import org.apache.pig.ResourceStatistics;
+import org.apache.pig.backend.executionengine.ExecException;
+import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.PigSplit;
+import org.apache.pig.backend.hadoop.executionengine.spark.SparkUtil;
+import org.apache.pig.data.DataType;
+import org.apache.pig.data.Tuple;
+import org.apache.pig.data.TupleFactory;
+import org.apache.pig.impl.logicalLayer.schema.Schema;
+import org.apache.pig.spark.LoadSparkFunc;
+import org.apache.spark.SparkContext;
+import org.apache.spark.rdd.RDD;
 
-import java.io.IOException;
-
-import java.util.List;
-import java.util.Map;
-import java.util.HashMap;
-import java.util.Properties;
-import java.util.ArrayList;
-import java.io.StringWriter;
-
+import scala.Tuple2;
+import scala.runtime.AbstractFunction1;
 import fi.tkk.ics.hadoop.bam.FastaInputFormat;
 import fi.tkk.ics.hadoop.bam.FastaInputFormat.FastaRecordReader;
 import fi.tkk.ics.hadoop.bam.ReferenceFragment;
 
-public class FastaLoader extends LoadFunc implements LoadMetadata {
+public class FastaLoader extends LoadFunc implements LoadMetadata, LoadSparkFunc {
     protected RecordReader in = null;
-    private ArrayList<Object> mProtoTuple = null;
-    private TupleFactory mTupleFactory = TupleFactory.getInstance();
+    private static TupleFactory mTupleFactory = TupleFactory.getInstance();
 
     // tuple format:
     //
@@ -74,10 +69,7 @@ public class FastaLoader extends LoadFunc implements LoadMetadata {
     public Tuple getNext() throws IOException {
         try {
 	    
-	    if (mProtoTuple == null) {
-		mProtoTuple = new ArrayList<Object>();
-	    }
-	    
+	   
             boolean notDone = in.nextKeyValue();
             if (!notDone) {
                 return null;
@@ -85,14 +77,10 @@ public class FastaLoader extends LoadFunc implements LoadMetadata {
 
 	    Text fastqrec_name = ((FastaRecordReader)in).getCurrentKey();
             ReferenceFragment fastqrec = ((FastaRecordReader)in).getCurrentValue();
+         
+        //Refactoring for reusability
+	    return ReferenceFragmentToTuple(fastqrec);
 	    
-	    mProtoTuple.add(fastqrec.getIndexSequence());
-	    mProtoTuple.add(fastqrec.getPosition());
-	    mProtoTuple.add(fastqrec.getSequence().toString());
-
-            Tuple t =  mTupleFactory.newTupleNoCopy(mProtoTuple);
-            mProtoTuple = null;
-            return t;
         } catch (InterruptedException e) {
             int errCode = 6018;
             String errMsg = "Error while reading Fastq input: check data format! (Casava 1.8?)";
@@ -101,6 +89,21 @@ public class FastaLoader extends LoadFunc implements LoadMetadata {
         }
 
     }
+
+	private static Tuple ReferenceFragmentToTuple(ReferenceFragment fastqrec) {
+		ArrayList<Object> mProtoTuple = null;
+		if (mProtoTuple == null) {
+			mProtoTuple = new ArrayList<Object>();
+		}
+
+		mProtoTuple.add(fastqrec.getIndexSequence());
+		mProtoTuple.add(fastqrec.getPosition());
+		mProtoTuple.add(fastqrec.getSequence().toString());
+
+		Tuple t = mTupleFactory.newTupleNoCopy(mProtoTuple);
+		mProtoTuple = null;
+		return t;
+	}
 
     @Override
     public InputFormat getInputFormat() {
@@ -137,4 +140,31 @@ public class FastaLoader extends LoadFunc implements LoadMetadata {
 
     @Override
     public ResourceStatistics getStatistics(String location, Job job) throws IOException { return null; }
+
+    /*
+     * (non-Javadoc)
+     * @see org.apache.pig.spark.LoadSparkFunc#getRDDfromContext(org.apache.spark.SparkContext, java.lang.String, org.apache.hadoop.mapred.JobConf)
+     * LoadSparkFunc implementation ignores Text and converts ReferenceFragment to Tuple
+     */
+	@Override
+	public RDD<Tuple> getRDDfromContext(SparkContext sc, String path,
+			JobConf conf) {
+		RDD<Tuple2<Text, ReferenceFragment>> hadoopRDD = sc
+				.newAPIHadoopFile(path, FastaInputFormat.class,
+						Text.class, ReferenceFragment.class, conf);
+		
+		ToTupleFunction TO_TUPLE_FUNCTION = new ToTupleFunction();
+		return hadoopRDD.map(TO_TUPLE_FUNCTION,
+				SparkUtil.getManifest(Tuple.class));
+	}
+	
+	private static class ToTupleFunction extends
+			AbstractFunction1<Tuple2<Text, ReferenceFragment>, Tuple>
+			implements Serializable {
+
+		@Override
+		public Tuple apply(Tuple2<Text, ReferenceFragment> v1) {
+			return ReferenceFragmentToTuple(v1._2());
+		}
+	}
 }

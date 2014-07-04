@@ -1,0 +1,60 @@
+#!/bin/bash
+
+# Getting started
+#
+# Compile spark with hadoop 2.2.0 -SPARK_HADOOP_VERSION=2.2.0 SPARK_YARN=true ./sbt/sbt clean assembly to generate spark.jar
+
+# Compile pig with -Dhadoopversion=23 flag
+
+# Configure following environment variables to run it on YARN cluster
+
+
+# Follow this guide for for enabling running spork:
+##  http://docs.sigmoidanalytics.com/index.php/Setting_up_spork_with_spark_0.8.1
+
+if [ -z "$HADOOP_CONF_DIR" ]; then
+    echo "You need to set HADOOP_CONF_DIR"
+    exit 1
+fi
+if [ -z "$HADOOP_HOME" ]; then
+    echo "You need to set HADOOP_HOME"
+    exit 1
+fi
+
+# Settings to work with YARN, spark jar compiled with hadoop 2
+export SPARK_MASTER=spark://ws-37:7077
+
+# Simple wrapper script to start pig with with SeqPig-related jars and
+# set the udf.import.list property to fi.aalto.seqpig.
+
+if [ -z "${SEQPIG_HOME}" ]; then
+	SEQPIG_HOME="`dirname $(readlink -f $0)`/../"
+fi
+
+source "${SEQPIG_HOME}/bin/seqpigEnv.sh"
+
+import_list=fi.aalto.seqpig:fi.aalto.seqpig.io:fi.aalto.seqpig.filter:fi.aalto.seqpig.pileup:fi.aalto.seqpig.stats:myudf
+
+echo "pig.additional.jars: ${SEQPIG_JARS}"
+echo "udf.import.list: ${import_list}"
+
+export PIG_CLASSPATH=$PIG_HOME/build/ivy/lib/Pig/netty-3.6.6.Final.jar:$PIG_HOME/pig-withouthadoop.jar:$PIG_HOME/lib/spark/mesos-0.9.0.jar:$HADOOP_CONF_DIR:$PIG_HOME/conf:$SPARK_HOME/assembly/target/scala-2.10/spark-assembly-1.0.0-hadoop2.2.0.jar
+export PIG_CLASSPATH=$PIG_CLASSPATH:$PIG_HOME/build/ivy/lib/Pig/jython-standalone-2.5.3.jar:${SEQPIG_JARS}
+export SPARK_JARS="$PIG_HOME/pig.jar:${SEQPIG_JARS}"
+export SPARK_PIG_JAR=$PIG_HOME/pig.jar
+
+# Cluster settings
+export SPARK_WORKER_CORES=1
+export SPARK_WORKER_MEMORY=512m
+export SPARK_MEM=512m
+export SPARK_WORKER_INSTANCES=1
+
+echo "${PIG_HOME}/bin/pig -x spark   ${@}"
+exec "${PIG_HOME}/bin/pig" -x spark  "${@}"
+
+
+
+
+
+
+
