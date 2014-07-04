@@ -20,181 +20,227 @@
 
 package fi.aalto.seqpig.io;
 
-import org.apache.pig.LoadFunc;
-import org.apache.pig.LoadMetadata;
-import org.apache.pig.data.TupleFactory;
-import org.apache.pig.data.Tuple; 
-import org.apache.pig.data.DataByteArray;
-import org.apache.pig.backend.executionengine.ExecException;
-import org.apache.pig.PigException;
-import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.PigSplit;
-import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.PigTextInputFormat;
-import org.apache.pig.ResourceSchema;
-import org.apache.pig.ResourceSchema.ResourceFieldSchema;
-import org.apache.pig.ResourceStatistics;
-import org.apache.pig.data.DataType;
-import org.apache.pig.Expression;
-import org.apache.pig.impl.logicalLayer.schema.Schema;
-
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.mapreduce.InputFormat;
-import org.apache.hadoop.mapreduce.Job;
-import org.apache.hadoop.mapreduce.RecordReader; 
-import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
-import org.apache.hadoop.io.Text;
-
-import net.sf.samtools.SAMRecord;
-import net.sf.samtools.SAMTextHeaderCodec;
-import net.sf.samtools.SAMReadGroupRecord;
-import net.sf.samtools.SAMProgramRecord;
-import net.sf.samtools.SAMFileReader.ValidationStringency;
-
-import fi.tkk.ics.hadoop.bam.SAMInputFormat;
-import fi.tkk.ics.hadoop.bam.SAMRecordReader;
-import fi.tkk.ics.hadoop.bam.SAMRecordWritable;
-import fi.tkk.ics.hadoop.bam.FileVirtualSplit;
-
 import java.io.IOException;
+import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.HashMap;
-import java.io.StringWriter;
 
-public class SamLoader extends LoadFunc implements LoadMetadata {
-    protected RecordReader in = null;
-    private ArrayList<Object> mProtoTuple = null;
-    private TupleFactory mTupleFactory = TupleFactory.getInstance();
-    private boolean loadAttributes;
+import net.sf.samtools.SAMRecord;
 
-    public SamLoader() {
-	loadAttributes = false;
-	System.out.println("BamLoader: ignoring attributes");
-    }
-    
-    public SamLoader(String loadAttributesStr) {
-	if(loadAttributesStr.equals("yes"))
-	    loadAttributes = true;
-	else {
-	    loadAttributes = false;
-	    System.out.println("BamLoader: ignoring attributes");
+import org.apache.hadoop.io.LongWritable;
+import org.apache.hadoop.mapred.JobConf;
+import org.apache.hadoop.mapreduce.InputFormat;
+import org.apache.hadoop.mapreduce.Job;
+import org.apache.hadoop.mapreduce.RecordReader;
+import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
+import org.apache.pig.Expression;
+import org.apache.pig.LoadFunc;
+import org.apache.pig.LoadMetadata;
+import org.apache.pig.PigException;
+import org.apache.pig.ResourceSchema;
+import org.apache.pig.ResourceStatistics;
+import org.apache.pig.backend.executionengine.ExecException;
+import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.PigSplit;
+import org.apache.pig.backend.hadoop.executionengine.spark.SparkUtil;
+import org.apache.pig.data.DataType;
+import org.apache.pig.data.Tuple;
+import org.apache.pig.data.TupleFactory;
+import org.apache.pig.impl.logicalLayer.schema.Schema;
+import org.apache.pig.spark.LoadSparkFunc;
+import org.apache.spark.SparkContext;
+import org.apache.spark.rdd.RDD;
+
+import scala.Tuple2;
+import scala.runtime.AbstractFunction1;
+import fi.tkk.ics.hadoop.bam.SAMInputFormat;
+import fi.tkk.ics.hadoop.bam.SAMRecordWritable;
+
+public class SamLoader extends LoadFunc implements LoadMetadata, LoadSparkFunc {
+	protected RecordReader in = null;
+
+	private boolean loadAttributes;
+
+	public SamLoader() {
+		loadAttributes = false;
+		System.out.println("BamLoader: ignoring attributes");
 	}
-    }
-    
-    @Override
-    public Tuple getNext() throws IOException {
-        try {
-	    
-	    if (mProtoTuple == null) {
-		mProtoTuple = new ArrayList<Object>();
-	    }
-	    
-            boolean notDone = in.nextKeyValue();
-            if (!notDone) {
-                return null;
-            }
-            SAMRecord samrec = ((SAMRecordWritable)in.getCurrentValue()).get();
-	    
-	    mProtoTuple.add(new String(samrec.getReadName()));
-	    mProtoTuple.add(new Integer(samrec.getAlignmentStart()));
-	    mProtoTuple.add(new Integer(samrec.getAlignmentEnd()));
-	    mProtoTuple.add(new String(samrec.getReadString()));
-	    mProtoTuple.add(new String(samrec.getCigarString()));
-	    mProtoTuple.add(new String(samrec.getBaseQualityString()));
-	    mProtoTuple.add(new Integer(samrec.getFlags()));
-	    mProtoTuple.add(new Integer(samrec.getInferredInsertSize()));
-	    mProtoTuple.add(new Integer(samrec.getMappingQuality()));
-	    mProtoTuple.add(new Integer(samrec.getMateAlignmentStart()));
-	    mProtoTuple.add(new Integer(samrec.getMateReferenceIndex()));
-	    mProtoTuple.add(new Integer(samrec.getReferenceIndex()));
-	    mProtoTuple.add(new String(samrec.getReferenceName()));
-	    
-	    if(loadAttributes) {
-		Map attributes = new HashMap<String, Object>();
-		
-		final List<SAMRecord.SAMTagAndValue> mySAMAttributes = samrec.getAttributes();
-		
-		for (final SAMRecord.SAMTagAndValue tagAndValue : mySAMAttributes) {
-		    
-		    if(tagAndValue.value != null) {
-			if(tagAndValue.value.getClass().getName().equals("java.lang.Character"))
-			    attributes.put(tagAndValue.tag, tagAndValue.value.toString());
-			else
-			    attributes.put(tagAndValue.tag, tagAndValue.value);
-		    }
+
+	public SamLoader(String loadAttributesStr) {
+		if (loadAttributesStr.equals("yes"))
+			loadAttributes = true;
+		else {
+			loadAttributes = false;
+			System.out.println("BamLoader: ignoring attributes");
 		}
-		
-		mProtoTuple.add(attributes);
-	    }
-	    
-            Tuple t =  mTupleFactory.newTupleNoCopy(mProtoTuple);
-            mProtoTuple = null;
-            return t;
-        } catch (InterruptedException e) {
-            int errCode = 6018;
-            String errMsg = "Error while reading input";
-            throw new ExecException(errMsg, errCode,
-				    PigException.REMOTE_ENVIRONMENT, e);
-        }
-	
-    }
-    
-    private boolean skipAttributeTag(String tag) {
-	return (tag.equalsIgnoreCase("AM")
-		|| tag.equalsIgnoreCase("NM")
-		|| tag.equalsIgnoreCase("SM")
-		|| tag.equalsIgnoreCase("XN")
-		|| tag.equalsIgnoreCase("MQ")
-		|| tag.equalsIgnoreCase("XT")
-		|| tag.equalsIgnoreCase("X0")
-		|| tag.equalsIgnoreCase("BQ")
-		|| tag.equalsIgnoreCase("X1")
-		|| tag.equalsIgnoreCase("XC"));
-    }
+	}
 
-    @Override
-    public InputFormat getInputFormat() {
-        return new SAMInputFormat();
-    }
+	@Override
+	public Tuple getNext() throws IOException {
+		try {
 
-    @Override
-    public void prepareToRead(RecordReader reader, PigSplit split) {
-        in = reader;
-    }
+			boolean notDone = in.nextKeyValue();
+			if (!notDone) {
+				return null;
+			}
 
-    @Override
-    public void setLocation(String location, Job job)
-	throws IOException {
-        FileInputFormat.setInputPaths(job, location);
-    }
+			SAMRecordWritable currentValue = (SAMRecordWritable) in
+					.getCurrentValue();
 
-    @Override
-    public ResourceSchema getSchema(String location, Job job) throws IOException {
+			return SAMRecordToTuple(currentValue, loadAttributes);
+		} catch (InterruptedException e) {
+			int errCode = 6018;
+			String errMsg = "Error while reading input";
+			throw new ExecException(errMsg, errCode,
+					PigException.REMOTE_ENVIRONMENT, e);
+		}
 
-        Schema s = new Schema();
-	s.add(new Schema.FieldSchema("name", DataType.CHARARRAY));
-	s.add(new Schema.FieldSchema("start", DataType.INTEGER));
-	s.add(new Schema.FieldSchema("end", DataType.INTEGER));
-	s.add(new Schema.FieldSchema("read", DataType.CHARARRAY));
-	s.add(new Schema.FieldSchema("cigar", DataType.CHARARRAY));
-	s.add(new Schema.FieldSchema("basequal", DataType.CHARARRAY));
-	s.add(new Schema.FieldSchema("flags", DataType.INTEGER));
-	s.add(new Schema.FieldSchema("insertsize", DataType.INTEGER));
-	s.add(new Schema.FieldSchema("mapqual", DataType.INTEGER));
-	s.add(new Schema.FieldSchema("matestart", DataType.INTEGER));
-	s.add(new Schema.FieldSchema("materefindex", DataType.INTEGER));
-	s.add(new Schema.FieldSchema("refindex", DataType.INTEGER));
-	s.add(new Schema.FieldSchema("refname", DataType.CHARARRAY));
-	s.add(new Schema.FieldSchema("attributes", DataType.MAP));
-        return new ResourceSchema(s);
-    }
+	}
 
-    @Override
-    public String[] getPartitionKeys(String location, Job job) throws IOException { return null; }
+	/**
+	 * @param samrec
+	 * @return
+	 * @throws IOException
+	 * @throws InterruptedException
+	 */
+	private static Tuple SAMRecordToTuple(SAMRecordWritable currentValue,
+			boolean loadAttributes) {
+		SAMRecord samrec = currentValue.get();
+		ArrayList<Object> mProtoTuple = null;
+		if (mProtoTuple == null) {
+			mProtoTuple = new ArrayList<Object>();
+		}
 
-    @Override
-    public void setPartitionFilter(Expression partitionFilter) throws IOException { }
+		mProtoTuple.add(new String(samrec.getReadName()));
+		mProtoTuple.add(new Integer(samrec.getAlignmentStart()));
+		mProtoTuple.add(new Integer(samrec.getAlignmentEnd()));
+		mProtoTuple.add(new String(samrec.getReadString()));
+		mProtoTuple.add(new String(samrec.getCigarString()));
+		mProtoTuple.add(new String(samrec.getBaseQualityString()));
+		mProtoTuple.add(new Integer(samrec.getFlags()));
+		mProtoTuple.add(new Integer(samrec.getInferredInsertSize()));
+		mProtoTuple.add(new Integer(samrec.getMappingQuality()));
+		mProtoTuple.add(new Integer(samrec.getMateAlignmentStart()));
+		mProtoTuple.add(new Integer(samrec.getMateReferenceIndex()));
+		mProtoTuple.add(new Integer(samrec.getReferenceIndex()));
+		mProtoTuple.add(new String(samrec.getReferenceName()));
 
-    @Override
-    public ResourceStatistics getStatistics(String location, Job job) throws IOException { return null; }
+		if (loadAttributes) {
+			Map attributes = new HashMap<String, Object>();
+
+			final List<SAMRecord.SAMTagAndValue> mySAMAttributes = samrec
+					.getAttributes();
+
+			for (final SAMRecord.SAMTagAndValue tagAndValue : mySAMAttributes) {
+
+				if (tagAndValue.value != null) {
+					if (tagAndValue.value.getClass().getName()
+							.equals("java.lang.Character"))
+						attributes.put(tagAndValue.tag,
+								tagAndValue.value.toString());
+					else
+						attributes.put(tagAndValue.tag, tagAndValue.value);
+				}
+			}
+
+			mProtoTuple.add(attributes);
+		}
+
+		final TupleFactory mTupleFactory = TupleFactory.getInstance();
+		Tuple t = mTupleFactory.newTupleNoCopy(mProtoTuple);
+		mProtoTuple = null;
+		return t;
+	}
+
+	private boolean skipAttributeTag(String tag) {
+		return (tag.equalsIgnoreCase("AM") || tag.equalsIgnoreCase("NM")
+				|| tag.equalsIgnoreCase("SM") || tag.equalsIgnoreCase("XN")
+				|| tag.equalsIgnoreCase("MQ") || tag.equalsIgnoreCase("XT")
+				|| tag.equalsIgnoreCase("X0") || tag.equalsIgnoreCase("BQ")
+				|| tag.equalsIgnoreCase("X1") || tag.equalsIgnoreCase("XC"));
+	}
+
+	@Override
+	public InputFormat getInputFormat() {
+		return new SAMInputFormat();
+	}
+
+	@Override
+	public void prepareToRead(RecordReader reader, PigSplit split) {
+		in = reader;
+	}
+
+	@Override
+	public void setLocation(String location, Job job) throws IOException {
+		FileInputFormat.setInputPaths(job, location);
+	}
+
+	@Override
+	public ResourceSchema getSchema(String location, Job job)
+			throws IOException {
+
+		Schema s = new Schema();
+		s.add(new Schema.FieldSchema("name", DataType.CHARARRAY));
+		s.add(new Schema.FieldSchema("start", DataType.INTEGER));
+		s.add(new Schema.FieldSchema("end", DataType.INTEGER));
+		s.add(new Schema.FieldSchema("read", DataType.CHARARRAY));
+		s.add(new Schema.FieldSchema("cigar", DataType.CHARARRAY));
+		s.add(new Schema.FieldSchema("basequal", DataType.CHARARRAY));
+		s.add(new Schema.FieldSchema("flags", DataType.INTEGER));
+		s.add(new Schema.FieldSchema("insertsize", DataType.INTEGER));
+		s.add(new Schema.FieldSchema("mapqual", DataType.INTEGER));
+		s.add(new Schema.FieldSchema("matestart", DataType.INTEGER));
+		s.add(new Schema.FieldSchema("materefindex", DataType.INTEGER));
+		s.add(new Schema.FieldSchema("refindex", DataType.INTEGER));
+		s.add(new Schema.FieldSchema("refname", DataType.CHARARRAY));
+		s.add(new Schema.FieldSchema("attributes", DataType.MAP));
+		return new ResourceSchema(s);
+	}
+
+	@Override
+	public String[] getPartitionKeys(String location, Job job)
+			throws IOException {
+		return null;
+	}
+
+	@Override
+	public void setPartitionFilter(Expression partitionFilter)
+			throws IOException {
+	}
+
+	@Override
+	public ResourceStatistics getStatistics(String location, Job job)
+			throws IOException {
+		return null;
+	}
+
+	@Override
+	public RDD<Tuple> getRDDfromContext(SparkContext sc, String path,
+			JobConf conf) throws IOException {
+		// Map key value pairs to tuples by omitting LongWritable
+		RDD<Tuple2<LongWritable, SAMRecordWritable>> hadoopRDD = sc
+				.newAPIHadoopFile(path, SAMInputFormat.class,
+						LongWritable.class, SAMRecordWritable.class, conf);
+
+		ToTupleFunction TO_TUPLE_FUNCTION = new ToTupleFunction(loadAttributes);
+		return hadoopRDD.map(TO_TUPLE_FUNCTION,
+				SparkUtil.getManifest(Tuple.class));
+	}
+
+	private static class ToTupleFunction extends
+			AbstractFunction1<Tuple2<LongWritable, SAMRecordWritable>, Tuple>
+			implements Serializable {
+
+		boolean loadAttributes = false;
+
+		public ToTupleFunction(boolean loadAttributes) {
+			this.loadAttributes = loadAttributes;
+		}
+
+		@Override
+		public Tuple apply(Tuple2<LongWritable, SAMRecordWritable> v1) {
+			return SAMRecordToTuple(v1._2(), loadAttributes);
+		}
+	}
 }

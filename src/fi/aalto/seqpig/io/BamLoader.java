@@ -214,7 +214,7 @@ public class BamLoader extends LoadFunc implements LoadMetadata, LoadSparkFunc {
 	//Spark StoreFunction Support
 	@Override
 	public RDD<Tuple> getRDDfromContext(SparkContext sc, String path,
-			JobConf conf) {
+			JobConf conf) throws IOException {
 		//Map  key value pairs to tuples by omitting LongWritable
 		RDD<Tuple2<LongWritable, SAMRecordWritable>> hadoopRDD = sc
 				.newAPIHadoopFile(path, BAMInputFormat.class,

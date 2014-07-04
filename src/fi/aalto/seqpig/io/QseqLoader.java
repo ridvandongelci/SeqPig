@@ -22,12 +22,13 @@ package fi.aalto.seqpig.io;
 
 import org.apache.pig.LoadFunc;
 import org.apache.pig.data.TupleFactory;
-import org.apache.pig.data.Tuple; 
+import org.apache.pig.data.Tuple;
 import org.apache.pig.data.DataByteArray;
 import org.apache.pig.backend.executionengine.ExecException;
 import org.apache.pig.PigException;
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.PigSplit;
 import org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.PigTextInputFormat;
+import org.apache.pig.backend.hadoop.executionengine.spark.SparkUtil;
 import org.apache.pig.impl.util.UDFContext;
 import org.apache.pig.ResourceSchema;
 import org.apache.pig.ResourceSchema.ResourceFieldSchema;
@@ -36,16 +37,22 @@ import org.apache.pig.LoadMetadata;
 import org.apache.pig.data.DataType;
 import org.apache.pig.Expression;
 import org.apache.pig.impl.logicalLayer.schema.Schema;
-
+import org.apache.pig.spark.LoadSparkFunc;
+import org.apache.spark.SparkContext;
+import org.apache.spark.rdd.RDD;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapreduce.InputFormat;
 import org.apache.hadoop.mapreduce.Job;
-import org.apache.hadoop.mapreduce.RecordReader; 
+import org.apache.hadoop.mapreduce.RecordReader;
 import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
 import org.apache.hadoop.io.Text;
 
-import java.io.IOException;
+import scala.Tuple2;
+import scala.runtime.AbstractFunction1;
 
+import java.io.IOException;
+import java.io.Serializable;
 import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
@@ -53,120 +60,161 @@ import java.util.Properties;
 import java.util.ArrayList;
 import java.io.StringWriter;
 
+import fi.tkk.ics.hadoop.bam.FastqInputFormat;
 import fi.tkk.ics.hadoop.bam.QseqInputFormat;
 import fi.tkk.ics.hadoop.bam.QseqInputFormat.QseqRecordReader;
 import fi.tkk.ics.hadoop.bam.SequencedFragment;
 
-public class QseqLoader extends LoadFunc implements LoadMetadata {
-    protected RecordReader in = null;
-    private ArrayList<Object> mProtoTuple = null;
-    private TupleFactory mTupleFactory = TupleFactory.getInstance();
+public class QseqLoader extends LoadFunc implements LoadMetadata, LoadSparkFunc {
+	protected RecordReader in = null;
 
-    // tuple format:
-    //
-    //   instrument:string
-    //   run_number:int
-    //   flow_cell_id: string
-    //   lane: int
-    //   tile: int
-    //   xpos: int
-    //   ypos: int
-    //   read: int
-    //   qc_passed (a.k.a. filter): boolean
-    //   control_number: int
-    //   index_sequence: string
-    //   sequence: string
-    //   quality: string (note: we assume that encoding chosen on command line!!!)
-    
-    public QseqLoader() {}
+	// tuple format:
+	//
+	// instrument:string
+	// run_number:int
+	// flow_cell_id: string
+	// lane: int
+	// tile: int
+	// xpos: int
+	// ypos: int
+	// read: int
+	// qc_passed (a.k.a. filter): boolean
+	// control_number: int
+	// index_sequence: string
+	// sequence: string
+	// quality: string (note: we assume that encoding chosen on command line!!!)
 
-    @Override
-    public Tuple getNext() throws IOException {
-        try {
-	    
-	    if (mProtoTuple == null) {
-		mProtoTuple = new ArrayList<Object>();
-	    }
-	    
-            boolean notDone = in.nextKeyValue();
-            if (!notDone) {
-                return null;
-            }
+	public QseqLoader() {
+	}
 
-	    Text fastqrec_name = ((QseqRecordReader)in).getCurrentKey();
-            SequencedFragment fastqrec = ((QseqRecordReader)in).getCurrentValue();
-	   
-	    //mProtoTuple.add(new String(fastqrec_name.toString()));
-	    
-	    mProtoTuple.add(fastqrec.getInstrument());
-	    mProtoTuple.add(fastqrec.getRunNumber());
-	    mProtoTuple.add(fastqrec.getFlowcellId());
-	    mProtoTuple.add(fastqrec.getLane());
-	    mProtoTuple.add(fastqrec.getTile());
-	    mProtoTuple.add(fastqrec.getXpos());
-	    mProtoTuple.add(fastqrec.getYpos());
-	    mProtoTuple.add(fastqrec.getRead());
-	    mProtoTuple.add(fastqrec.getFilterPassed());
-	    mProtoTuple.add(fastqrec.getControlNumber());
-	    mProtoTuple.add(fastqrec.getIndexSequence());
-	    mProtoTuple.add(fastqrec.getSequence().toString());
-  	    mProtoTuple.add(fastqrec.getQuality().toString());
+	@Override
+	public Tuple getNext() throws IOException {
+		try {
 
-            Tuple t =  mTupleFactory.newTupleNoCopy(mProtoTuple);
-            mProtoTuple = null;
-            return t;
-        } catch (InterruptedException e) {
-            int errCode = 6018;
-            String errMsg = "Error while reading Fastq input: check data format! (Casava 1.8?)";
-            throw new ExecException(errMsg, errCode,
-				    PigException.REMOTE_ENVIRONMENT, e);
-        }
+			boolean notDone = in.nextKeyValue();
+			if (!notDone) {
+				return null;
+			}
 
-    }
+			Text fastqrec_name = ((QseqRecordReader) in).getCurrentKey();
+			SequencedFragment fastqrec = ((QseqRecordReader) in)
+					.getCurrentValue();
 
-    @Override
-    public InputFormat getInputFormat() {
-        return new QseqInputFormat();
-    }
+			// mProtoTuple.add(new String(fastqrec_name.toString()));
 
-    @Override
-    public void prepareToRead(RecordReader reader, PigSplit split) {
-        in = reader;
-    }
+			return sequencedFragmentToTuple(fastqrec);
+		} catch (InterruptedException e) {
+			int errCode = 6018;
+			String errMsg = "Error while reading Fastq input: check data format! (Casava 1.8?)";
+			throw new ExecException(errMsg, errCode,
+					PigException.REMOTE_ENVIRONMENT, e);
+		}
 
-    @Override
-    public void setLocation(String location, Job job)
-	throws IOException {
-        FileInputFormat.setInputPaths(job, location);
-    }
+	}
 
-    @Override
-    public ResourceSchema getSchema(String location, Job job) throws IOException {
-       
-	Schema s = new Schema();
-	s.add(new Schema.FieldSchema("instrument", DataType.CHARARRAY));
-	s.add(new Schema.FieldSchema("run_number", DataType.INTEGER));
-	s.add(new Schema.FieldSchema("flow_cell_id", DataType.CHARARRAY));
-	s.add(new Schema.FieldSchema("lane", DataType.INTEGER));	
-	s.add(new Schema.FieldSchema("tile", DataType.INTEGER));
-	s.add(new Schema.FieldSchema("xpos", DataType.INTEGER));
-	s.add(new Schema.FieldSchema("ypos", DataType.INTEGER));
-	s.add(new Schema.FieldSchema("read", DataType.INTEGER));
-	s.add(new Schema.FieldSchema("qc_passed", DataType.BOOLEAN));
-	s.add(new Schema.FieldSchema("control_number", DataType.INTEGER));
-	s.add(new Schema.FieldSchema("index_sequence", DataType.CHARARRAY));
-	s.add(new Schema.FieldSchema("sequence", DataType.CHARARRAY));
-	s.add(new Schema.FieldSchema("quality", DataType.CHARARRAY));
+	/**
+	 * @param fastqrec
+	 * @return
+	 */
+	private static Tuple sequencedFragmentToTuple(SequencedFragment fastqrec) {
+		ArrayList<Object> mProtoTuple = null;
+		if (mProtoTuple == null) {
+			mProtoTuple = new ArrayList<Object>();
+		}
 
-        return new ResourceSchema(s);
-    }
+		mProtoTuple.add(fastqrec.getInstrument());
+		mProtoTuple.add(fastqrec.getRunNumber());
+		mProtoTuple.add(fastqrec.getFlowcellId());
+		mProtoTuple.add(fastqrec.getLane());
+		mProtoTuple.add(fastqrec.getTile());
+		mProtoTuple.add(fastqrec.getXpos());
+		mProtoTuple.add(fastqrec.getYpos());
+		mProtoTuple.add(fastqrec.getRead());
+		mProtoTuple.add(fastqrec.getFilterPassed());
+		mProtoTuple.add(fastqrec.getControlNumber());
+		mProtoTuple.add(fastqrec.getIndexSequence());
+		mProtoTuple.add(fastqrec.getSequence().toString());
+		mProtoTuple.add(fastqrec.getQuality().toString());
 
-    @Override
-    public String[] getPartitionKeys(String location, Job job) throws IOException { return null; }
+		final TupleFactory mTupleFactory = TupleFactory.getInstance();
+		Tuple t = mTupleFactory.newTupleNoCopy(mProtoTuple);
+		mProtoTuple = null;
+		return t;
+	}
 
-    @Override
-    public void setPartitionFilter(Expression partitionFilter) throws IOException { }
+	@Override
+	public InputFormat getInputFormat() {
+		return new QseqInputFormat();
+	}
 
-    @Override
-    public ResourceStatistics getStatistics(String location, Job job) throws IOException { return null; }
+	@Override
+	public void prepareToRead(RecordReader reader, PigSplit split) {
+		in = reader;
+	}
+
+	@Override
+	public void setLocation(String location, Job job) throws IOException {
+		FileInputFormat.setInputPaths(job, location);
+	}
+
+	@Override
+	public ResourceSchema getSchema(String location, Job job)
+			throws IOException {
+
+		Schema s = new Schema();
+		s.add(new Schema.FieldSchema("instrument", DataType.CHARARRAY));
+		s.add(new Schema.FieldSchema("run_number", DataType.INTEGER));
+		s.add(new Schema.FieldSchema("flow_cell_id", DataType.CHARARRAY));
+		s.add(new Schema.FieldSchema("lane", DataType.INTEGER));
+		s.add(new Schema.FieldSchema("tile", DataType.INTEGER));
+		s.add(new Schema.FieldSchema("xpos", DataType.INTEGER));
+		s.add(new Schema.FieldSchema("ypos", DataType.INTEGER));
+		s.add(new Schema.FieldSchema("read", DataType.INTEGER));
+		s.add(new Schema.FieldSchema("qc_passed", DataType.BOOLEAN));
+		s.add(new Schema.FieldSchema("control_number", DataType.INTEGER));
+		s.add(new Schema.FieldSchema("index_sequence", DataType.CHARARRAY));
+		s.add(new Schema.FieldSchema("sequence", DataType.CHARARRAY));
+		s.add(new Schema.FieldSchema("quality", DataType.CHARARRAY));
+
+		return new ResourceSchema(s);
+	}
+
+	@Override
+	public String[] getPartitionKeys(String location, Job job)
+			throws IOException {
+		return null;
+	}
+
+	@Override
+	public void setPartitionFilter(Expression partitionFilter)
+			throws IOException {
+	}
+
+	@Override
+	public ResourceStatistics getStatistics(String location, Job job)
+			throws IOException {
+		return null;
+	}
+
+	@Override
+	public RDD<Tuple> getRDDfromContext(SparkContext sc, String path,
+			JobConf conf) throws IOException {
+		RDD<Tuple2<Text, SequencedFragment>> hadoopRDD = sc.newAPIHadoopFile(
+				path, QseqInputFormat.class, Text.class,
+				SequencedFragment.class, conf);
+
+		ToTupleFunction TO_TUPLE_FUNCTION = new ToTupleFunction();
+		return hadoopRDD.map(TO_TUPLE_FUNCTION,
+				SparkUtil.getManifest(Tuple.class));
+	}
+
+	private static class ToTupleFunction extends
+			AbstractFunction1<Tuple2<Text, SequencedFragment>, Tuple> implements
+			Serializable {
+
+		@Override
+		public Tuple apply(Tuple2<Text, SequencedFragment> v1) {
+			return sequencedFragmentToTuple(v1._2());
+		}
+	}
 }

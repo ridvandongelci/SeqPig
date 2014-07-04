@@ -53,44 +53,46 @@ import fi.tkk.ics.hadoop.bam.FastaInputFormat;
 import fi.tkk.ics.hadoop.bam.FastaInputFormat.FastaRecordReader;
 import fi.tkk.ics.hadoop.bam.ReferenceFragment;
 
-public class FastaLoader extends LoadFunc implements LoadMetadata, LoadSparkFunc {
-    protected RecordReader in = null;
-    private static TupleFactory mTupleFactory = TupleFactory.getInstance();
+public class FastaLoader extends LoadFunc implements LoadMetadata,
+		LoadSparkFunc {
+	protected RecordReader in = null;
+	private static TupleFactory mTupleFactory = TupleFactory.getInstance();
 
-    // tuple format:
-    //
-    //   index_sequence: string (chromosome or contig identifier)
-    //   start: int (start position of reference fragment)
-    //   sequence: string
-    
-    public FastaLoader() {}
+	// tuple format:
+	//
+	// index_sequence: string (chromosome or contig identifier)
+	// start: int (start position of reference fragment)
+	// sequence: string
 
-    @Override
-    public Tuple getNext() throws IOException {
-        try {
-	    
-	   
-            boolean notDone = in.nextKeyValue();
-            if (!notDone) {
-                return null;
-            }
+	public FastaLoader() {
+	}
 
-	    Text fastqrec_name = ((FastaRecordReader)in).getCurrentKey();
-            ReferenceFragment fastqrec = ((FastaRecordReader)in).getCurrentValue();
-         
-        //Refactoring for reusability
-	    return ReferenceFragmentToTuple(fastqrec);
-	    
-        } catch (InterruptedException e) {
-            int errCode = 6018;
-            String errMsg = "Error while reading Fastq input: check data format! (Casava 1.8?)";
-            throw new ExecException(errMsg, errCode,
-				    PigException.REMOTE_ENVIRONMENT, e);
-        }
+	@Override
+	public Tuple getNext() throws IOException {
+		try {
 
-    }
+			boolean notDone = in.nextKeyValue();
+			if (!notDone) {
+				return null;
+			}
 
-	private static Tuple ReferenceFragmentToTuple(ReferenceFragment fastqrec) {
+			Text fastqrec_name = ((FastaRecordReader) in).getCurrentKey();
+			ReferenceFragment fastqrec = ((FastaRecordReader) in)
+					.getCurrentValue();
+
+			// Refactoring for reusability
+			return referenceFragmentToTuple(fastqrec);
+
+		} catch (InterruptedException e) {
+			int errCode = 6018;
+			String errMsg = "Error while reading Fastq input: check data format! (Casava 1.8?)";
+			throw new ExecException(errMsg, errCode,
+					PigException.REMOTE_ENVIRONMENT, e);
+		}
+
+	}
+
+	private static Tuple referenceFragmentToTuple(ReferenceFragment fastqrec) {
 		ArrayList<Object> mProtoTuple = null;
 		if (mProtoTuple == null) {
 			mProtoTuple = new ArrayList<Object>();
@@ -105,66 +107,78 @@ public class FastaLoader extends LoadFunc implements LoadMetadata, LoadSparkFunc
 		return t;
 	}
 
-    @Override
-    public InputFormat getInputFormat() {
-        return new FastaInputFormat();
-    }
+	@Override
+	public InputFormat getInputFormat() {
+		return new FastaInputFormat();
+	}
 
-    @Override
-    public void prepareToRead(RecordReader reader, PigSplit split) {
-        in = reader;
-    }
+	@Override
+	public void prepareToRead(RecordReader reader, PigSplit split) {
+		in = reader;
+	}
 
-    @Override
-    public void setLocation(String location, Job job)
-	throws IOException {
-        FileInputFormat.setInputPaths(job, location);
-    }
+	@Override
+	public void setLocation(String location, Job job) throws IOException {
+		FileInputFormat.setInputPaths(job, location);
+	}
 
-    @Override
-    public ResourceSchema getSchema(String location, Job job) throws IOException {
-       
-	Schema s = new Schema();
-	s.add(new Schema.FieldSchema("index_sequence", DataType.CHARARRAY));
-	s.add(new Schema.FieldSchema("start", DataType.INTEGER));
-	s.add(new Schema.FieldSchema("sequence", DataType.CHARARRAY));
+	@Override
+	public ResourceSchema getSchema(String location, Job job)
+			throws IOException {
 
-        return new ResourceSchema(s);
-    }
+		Schema s = new Schema();
+		s.add(new Schema.FieldSchema("index_sequence", DataType.CHARARRAY));
+		s.add(new Schema.FieldSchema("start", DataType.INTEGER));
+		s.add(new Schema.FieldSchema("sequence", DataType.CHARARRAY));
 
-    @Override
-    public String[] getPartitionKeys(String location, Job job) throws IOException { return null; }
+		return new ResourceSchema(s);
+	}
 
-    @Override
-    public void setPartitionFilter(Expression partitionFilter) throws IOException { }
+	@Override
+	public String[] getPartitionKeys(String location, Job job)
+			throws IOException {
+		return null;
+	}
 
-    @Override
-    public ResourceStatistics getStatistics(String location, Job job) throws IOException { return null; }
+	@Override
+	public void setPartitionFilter(Expression partitionFilter)
+			throws IOException {
+	}
 
-    /*
-     * (non-Javadoc)
-     * @see org.apache.pig.spark.LoadSparkFunc#getRDDfromContext(org.apache.spark.SparkContext, java.lang.String, org.apache.hadoop.mapred.JobConf)
-     * LoadSparkFunc implementation ignores Text and converts ReferenceFragment to Tuple
-     */
+	@Override
+	public ResourceStatistics getStatistics(String location, Job job)
+			throws IOException {
+		return null;
+	}
+
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see
+	 * org.apache.pig.spark.LoadSparkFunc#getRDDfromContext(org.apache.spark
+	 * .SparkContext, java.lang.String, org.apache.hadoop.mapred.JobConf)
+	 * LoadSparkFunc implementation ignores Text and converts ReferenceFragment
+	 * to Tuple
+	 */
 	@Override
 	public RDD<Tuple> getRDDfromContext(SparkContext sc, String path,
-			JobConf conf) {
-		RDD<Tuple2<Text, ReferenceFragment>> hadoopRDD = sc
-				.newAPIHadoopFile(path, FastaInputFormat.class,
-						Text.class, ReferenceFragment.class, conf);
-		
+			JobConf conf) throws IOException {
+		RDD<Tuple2<Text, ReferenceFragment>> hadoopRDD = sc.newAPIHadoopFile(
+				path, FastaInputFormat.class, Text.class,
+				ReferenceFragment.class, conf);
+
 		ToTupleFunction TO_TUPLE_FUNCTION = new ToTupleFunction();
 		return hadoopRDD.map(TO_TUPLE_FUNCTION,
 				SparkUtil.getManifest(Tuple.class));
 	}
-	
+
 	private static class ToTupleFunction extends
-			AbstractFunction1<Tuple2<Text, ReferenceFragment>, Tuple>
-			implements Serializable {
+			AbstractFunction1<Tuple2<Text, ReferenceFragment>, Tuple> implements
+			Serializable {
 
 		@Override
 		public Tuple apply(Tuple2<Text, ReferenceFragment> v1) {
-			return ReferenceFragmentToTuple(v1._2());
+			return referenceFragmentToTuple(v1._2());
 		}
 	}
 }

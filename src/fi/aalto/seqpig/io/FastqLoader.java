@@ -73,36 +73,32 @@ public class FastqLoader extends LoadFunc implements LoadMetadata, LoadSparkFunc
     //   index_sequence: string
     //   sequence: string
     //   quality: string (note: we assume that encoding chosen on command line!!!)
-    
+
     public FastqLoader() {}
 
     @Override
     public Tuple getNext() throws IOException {
         try {
-	    
-	   
-	    
+        	
             boolean notDone = in.nextKeyValue();
             if (!notDone) {
                 return null;
             }
 
-	    Text fastqrec_name = ((FastqRecordReader)in).getCurrentKey();
+            Text fastqrec_name = ((FastqRecordReader)in).getCurrentKey();
             SequencedFragment fastqrec = ((FastqRecordReader)in).getCurrentValue();
 	   
 	    //mProtoTuple.add(new String(fastqrec_name.toString()));
 	    //Refactoring for reusability
-	    return SequencedFragmentToTuple(fastqrec);
+	    return sequencedFragmentToTuple(fastqrec);
         } catch (InterruptedException e) {
             int errCode = 6018;
             String errMsg = "Error while reading Fastq input: check data format! (Casava 1.8?)";
-            throw new ExecException(errMsg, errCode,
-				    PigException.REMOTE_ENVIRONMENT, e);
+            throw new ExecException(errMsg, errCode, PigException.REMOTE_ENVIRONMENT, e);
         }
-
     }
 
-	private static Tuple SequencedFragmentToTuple(SequencedFragment fastqrec) {
+	private static Tuple sequencedFragmentToTuple(SequencedFragment fastqrec) {
 
 		ArrayList<Object> mProtoTuple = null;
 		if (mProtoTuple == null) {
@@ -138,28 +134,26 @@ public class FastqLoader extends LoadFunc implements LoadMetadata, LoadSparkFunc
     }
 
     @Override
-    public void setLocation(String location, Job job)
-	throws IOException {
+    public void setLocation(String location, Job job) throws IOException {
         FileInputFormat.setInputPaths(job, location);
     }
 
     @Override
     public ResourceSchema getSchema(String location, Job job) throws IOException {
-       
-	Schema s = new Schema();
-	s.add(new Schema.FieldSchema("instrument", DataType.CHARARRAY));
-	s.add(new Schema.FieldSchema("run_number", DataType.INTEGER));
-	s.add(new Schema.FieldSchema("flow_cell_id", DataType.CHARARRAY));
-	s.add(new Schema.FieldSchema("lane", DataType.INTEGER));	
-	s.add(new Schema.FieldSchema("tile", DataType.INTEGER));
-	s.add(new Schema.FieldSchema("xpos", DataType.INTEGER));
-	s.add(new Schema.FieldSchema("ypos", DataType.INTEGER));
-	s.add(new Schema.FieldSchema("read", DataType.INTEGER));
-	s.add(new Schema.FieldSchema("qc_passed", DataType.BOOLEAN));
-	s.add(new Schema.FieldSchema("control_number", DataType.INTEGER));
-	s.add(new Schema.FieldSchema("index_sequence", DataType.CHARARRAY));
-	s.add(new Schema.FieldSchema("sequence", DataType.CHARARRAY));
-	s.add(new Schema.FieldSchema("quality", DataType.CHARARRAY));
+        Schema s = new Schema();
+        s.add(new Schema.FieldSchema("instrument", DataType.CHARARRAY));
+        s.add(new Schema.FieldSchema("run_number", DataType.INTEGER));
+        s.add(new Schema.FieldSchema("flow_cell_id", DataType.CHARARRAY));
+        s.add(new Schema.FieldSchema("lane", DataType.INTEGER));
+        s.add(new Schema.FieldSchema("tile", DataType.INTEGER));
+        s.add(new Schema.FieldSchema("xpos", DataType.INTEGER));
+        s.add(new Schema.FieldSchema("ypos", DataType.INTEGER));
+        s.add(new Schema.FieldSchema("read", DataType.INTEGER));
+        s.add(new Schema.FieldSchema("qc_passed", DataType.BOOLEAN));
+        s.add(new Schema.FieldSchema("control_number", DataType.INTEGER));
+        s.add(new Schema.FieldSchema("index_sequence", DataType.CHARARRAY));
+        s.add(new Schema.FieldSchema("sequence", DataType.CHARARRAY));
+        s.add(new Schema.FieldSchema("quality", DataType.CHARARRAY));
 
         return new ResourceSchema(s);
     }
@@ -180,7 +174,7 @@ public class FastqLoader extends LoadFunc implements LoadMetadata, LoadSparkFunc
      */
     @Override
 	public RDD<Tuple> getRDDfromContext(SparkContext sc, String path,
-			JobConf conf) {
+			JobConf conf) throws IOException {
 		RDD<Tuple2<Text, SequencedFragment>> hadoopRDD = sc
 				.newAPIHadoopFile(path, FastqInputFormat.class,
 						Text.class, SequencedFragment.class, conf);
@@ -196,7 +190,7 @@ public class FastqLoader extends LoadFunc implements LoadMetadata, LoadSparkFunc
 
 		@Override
 		public Tuple apply(Tuple2<Text, SequencedFragment> v1) {
-			return SequencedFragmentToTuple(v1._2());
+			return sequencedFragmentToTuple(v1._2());
 		}
 	}
 }

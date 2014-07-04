@@ -170,11 +170,8 @@ public class BamStorer extends StoreFunc implements StoreSparkFunc {
 	public void putNext(Tuple f) throws IOException {
 
 		initAttributesAndFieldNames();
-
-		SAMRecordWritable samrecwrite = new SAMRecordWritable();
-		SAMRecord samrec = TupleToSAMRecord(f, samfileheader_decoded,
-				allBAMFieldNames);
-		samrecwrite.set(samrec);
+		SAMRecordWritable samrecwrite = tupleToSAMRecord(f,
+				samfileheader_decoded, allBAMFieldNames);
 
 		try {
 			writer.write(null, samrecwrite);
@@ -212,9 +209,11 @@ public class BamStorer extends StoreFunc implements StoreSparkFunc {
 		}
 	}
 
-	private static SAMRecord TupleToSAMRecord(Tuple f,
+	private static SAMRecordWritable tupleToSAMRecord(Tuple f,
 			SAMFileHeader samfileheader_decoded,
 			HashMap<String, Integer> allBAMFieldNames) throws ExecException {
+
+		SAMRecordWritable samrecwrite = new SAMRecordWritable();
 		SAMRecord samrec = new SAMRecord(samfileheader_decoded);
 
 		int index = getFieldIndex("name", allBAMFieldNames);
@@ -287,7 +286,8 @@ public class BamStorer extends StoreFunc implements StoreSparkFunc {
 		}
 
 		samrec.hashCode(); // causes eagerDecode()
-		return samrec;
+		samrecwrite.set(samrec);
+		return samrecwrite;
 	}
 
 	private static int getFieldIndex(String field,
@@ -416,20 +416,17 @@ public class BamStorer extends StoreFunc implements StoreSparkFunc {
 	 * handle the BAM Header file
 	 */
 	@Override
-	public void putRDD(RDD<Tuple> rdd, String path, JobConf conf) {
+	public void putRDD(RDD<Tuple> rdd, String path, JobConf conf)
+			throws IOException {
 		String samfileheaderfilename;
 		String header;
-		try {
-			Properties p = UDFContext.getUDFContext().getUDFProperties(
-					this.getClass());
-			samfileheaderfilename = p.getProperty("samfileheaderfilename");
-			conf.set("samfileheaderfilename", samfileheaderfilename);
-			header = getSamFileHeaderFromHDFS(samfileheaderfilename, conf);
-			initAttributesAndFieldNames();
-		} catch (IOException e) {
-			e.printStackTrace();
-			throw new RuntimeException(e);
-		}
+
+		Properties p = UDFContext.getUDFContext().getUDFProperties(
+				this.getClass());
+		samfileheaderfilename = p.getProperty("samfileheaderfilename");
+		conf.set("samfileheaderfilename", samfileheaderfilename);
+		header = getSamFileHeaderFromHDFS(samfileheaderfilename, conf);
+		initAttributesAndFieldNames();
 
 		// System.out.println("samfileheaderfilename_decoded:" + header);
 		// System.out.println("allBAMFieldNames:" + allBAMFieldNames);
@@ -473,10 +470,8 @@ public class BamStorer extends StoreFunc implements StoreSparkFunc {
 				SAMFileHeader samfileheader_decoded = codec.decode(
 						new StringLineReader(this.samfileheader),
 						"SAMFileHeader.clone");
-				SAMRecordWritable samrecwrite = new SAMRecordWritable();
-				SAMRecord samRecord = TupleToSAMRecord(v1,
+				SAMRecordWritable samrecwrite = tupleToSAMRecord(v1,
 						samfileheader_decoded, allBAMFieldNames);
-				samrecwrite.set(samRecord);
 				return new Tuple2<Text, SAMRecordWritable>(EMPTY_TEXT,
 						samrecwrite);
 			} catch (ExecException e) {
