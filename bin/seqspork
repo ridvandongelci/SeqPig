@@ -22,7 +22,7 @@ if [ -z "$HADOOP_HOME" ]; then
 fi
 
 # Settings to work with YARN, spark jar compiled with hadoop 2
-export SPARK_MASTER=spark://ws-37:7077
+export SPARK_MASTER=yarn-client
 
 # Simple wrapper script to start pig with with SeqPig-related jars and
 # set the udf.import.list property to fi.aalto.seqpig.
