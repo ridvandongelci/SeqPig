@@ -146,11 +146,8 @@ public class ItemCounter2D implements Accumulator<Tuple> {
 
 		for (Tuple partial : values) {
 			DataByteArray data;
-			if (partial.get(0) instanceof DataByteArray)
+			if (partial.get(0) instanceof DataByteArray) {
 				data = (DataByteArray) partial.get(0);
-			else if (partial.get(0) instanceof String) {
-				data = new DataByteArray();
-				data.set((String) partial.get(0));
 			} else {
 				throw new RuntimeException("unexpected partial tuple class "
 						+ partial.getClass());
