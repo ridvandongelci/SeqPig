@@ -22,7 +22,11 @@
 package fi.aalto.seqpig.stats;
 
 import java.io.IOException;
+
+import org.apache.pig.data.BagFactory;
+import org.apache.pig.data.DataBag;
 import org.apache.pig.data.Tuple;
+import org.apache.pig.data.TupleFactory;
 import org.apache.pig.EvalFunc;
 import org.apache.pig.Accumulator;
 import org.apache.pig.Algebraic;
@@ -87,7 +91,18 @@ public class BaseQualCounts extends EvalFunc<Tuple> implements Algebraic, Accumu
 
 	@Override
 	public Tuple exec(Tuple input) throws IOException {
-		return itemCounter.execAggregate(input);
+		DataBag bg = (DataBag) input.get(0);
+		DataBag afterInitial = BagFactory.getInstance().newDefaultBag();
+		for (Tuple tuple : bg) {
+			DataBag single = BagFactory.getInstance().newDefaultBag();
+			single.add(tuple);
+			Tuple singleTuple = TupleFactory.getInstance().newTuple(single);
+			Tuple execInitial = itemCounter.execInitial(singleTuple);
+			afterInitial.add(execInitial);
+		}
+
+		return itemCounter.execAggregate(TupleFactory.getInstance().newTuple(
+				afterInitial));
 	}
 
 	public static class Initial extends EvalFunc<Tuple> {
