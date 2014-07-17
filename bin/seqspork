@@ -44,13 +44,13 @@ export SPARK_JARS="$PIG_HOME/pig.jar:${SEQPIG_JARS}"
 export SPARK_PIG_JAR=$PIG_HOME/pig.jar
 
 # Cluster settings
-export SPARK_WORKER_CORES=1
+export SPARK_WORKER_CORES=4
 export SPARK_WORKER_MEMORY=512m
 export SPARK_MEM=512m
 export SPARK_WORKER_INSTANCES=1
 
-echo "${PIG_HOME}/bin/pig -x spark   ${@}"
-exec "${PIG_HOME}/bin/pig" -x spark  "${@}"
+echo "${PIG_HOME}/bin/pig -x spark  ${@}"
+exec "${PIG_HOME}/bin/pig" -x spark "${@}"
 
 
 
