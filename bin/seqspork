@@ -38,10 +38,9 @@ import_list=fi.aalto.seqpig:fi.aalto.seqpig.io:fi.aalto.seqpig.filter:fi.aalto.s
 echo "pig.additional.jars: ${SEQPIG_JARS}"
 echo "udf.import.list: ${import_list}"
 
-export PIG_CLASSPATH=$PIG_HOME/build/ivy/lib/Pig/netty-3.6.6.Final.jar:$PIG_HOME/pig-withouthadoop.jar:$PIG_HOME/lib/spark/mesos-0.9.0.jar:$HADOOP_CONF_DIR:$PIG_HOME/conf:$SPARK_HOME/assembly/target/scala-2.10/spark-assembly-1.0.0-hadoop2.2.0.jar
-export PIG_CLASSPATH=$PIG_CLASSPATH:$PIG_HOME/build/ivy/lib/Pig/jython-standalone-2.5.3.jar:${SEQPIG_JARS}
-export SPARK_JARS="$PIG_HOME/pig.jar:${SEQPIG_JARS}"
-export SPARK_PIG_JAR=$PIG_HOME/pig.jar
+export PIG_CLASSPATH=$PIG_HOME/build/ivy/lib/Pig:$PIG_HOME/pig-0.15.0-SNAPSHOT-core-h2.jar:$HADOOP_CONF_DIR:$PIG_HOME/conf:$SPARK_HOME/assembly/target/scala-2.10/spark-assembly-1.0.0-hadoop2.2.0.jar:$SPARK_HOME/assembly/target/scala-2.10/spark-assembly-1.2.0-hadoop2.6.0.jar
+export PIG_CLASSPATH=$PIG_CLASSPATH::${SEQPIG_JARS}
+export SPARK_PIG_JAR=$PIG_HOME/pig-0.15.0-SNAPSHOT-core-h2.jar
 
 # Cluster settings
 export SPARK_EXECUTOR_CORES=4
@@ -50,7 +49,7 @@ export SPARK_MEM=500m
 export SPARK_EXECUTOR_INSTANCES=1
 
 #echo "${PIG_HOME}/bin/pig -x spark  ${@}"
-exec "${PIG_HOME}/pig-spark"
+${PIG_HOME}/bin/pig -x spark "$@"
 
 
 
