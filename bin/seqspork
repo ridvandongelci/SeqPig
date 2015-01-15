@@ -49,8 +49,8 @@ export SPARK_EXECUTOR_MEMORY=500m
 export SPARK_MEM=500m
 export SPARK_EXECUTOR_INSTANCES=1
 
-echo "${PIG_HOME}/bin/pig -x spark  ${@}"
-exec "${PIG_HOME}/bin/pig" -x spark "${@}"
+#echo "${PIG_HOME}/bin/pig -x spark  ${@}"
+exec "${PIG_HOME}/pig-spark"
 
 
 

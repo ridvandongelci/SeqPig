@@ -23,6 +23,7 @@
 		</fileset>
 		<fileset id="pig_jars" dir="${env.PIG_HOME}">
 			<include name="pig*.jar"/>
+			<include name="build/ivy/lib/Pig/*.jar/"/>
 		</fileset>
 	</path>
 
