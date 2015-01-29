@@ -56,9 +56,9 @@ import java.io.FileReader;
 import java.io.InputStreamReader;
 import java.net.URI;
 
-import fi.tkk.ics.hadoop.bam.QseqOutputFormat;
-import fi.tkk.ics.hadoop.bam.QseqOutputFormat.QseqRecordWriter;
-import fi.tkk.ics.hadoop.bam.SequencedFragment;
+import org.seqdoop.hadoop_bam.QseqOutputFormat;
+import org.seqdoop.hadoop_bam.QseqOutputFormat.QseqRecordWriter;
+import org.seqdoop.hadoop_bam.SequencedFragment;
 
 import org.apache.commons.codec.binary.Base64;
 

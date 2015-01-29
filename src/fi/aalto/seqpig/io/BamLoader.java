@@ -43,16 +43,16 @@ import org.apache.hadoop.mapreduce.RecordReader;
 import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
 import org.apache.hadoop.io.Text;
 
-import fi.tkk.ics.hadoop.bam.BAMInputFormat;
-import fi.tkk.ics.hadoop.bam.BAMRecordReader;
-import fi.tkk.ics.hadoop.bam.SAMRecordWritable;
-import fi.tkk.ics.hadoop.bam.FileVirtualSplit;
+import org.seqdoop.hadoop_bam.BAMInputFormat;
+import org.seqdoop.hadoop_bam.BAMRecordReader;
+import org.seqdoop.hadoop_bam.SAMRecordWritable;
+import org.seqdoop.hadoop_bam.FileVirtualSplit;
 
-import net.sf.samtools.SAMRecord;
-import net.sf.samtools.SAMTextHeaderCodec;
-import net.sf.samtools.SAMReadGroupRecord;
-import net.sf.samtools.SAMProgramRecord;
-import net.sf.samtools.SAMFileReader.ValidationStringency;
+import htsjdk.samtools.SAMRecord;
+import htsjdk.samtools.SAMTextHeaderCodec;
+import htsjdk.samtools.SAMReadGroupRecord;
+import htsjdk.samtools.SAMProgramRecord;
+//import htsjdk.samtools.SAMFileReader.ValidationStringency;
 
 import java.io.IOException;
 import java.util.ArrayList;

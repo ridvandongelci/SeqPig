@@ -29,7 +29,6 @@ import org.apache.pig.backend.executionengine.ExecException;
 import org.apache.pig.PigException;
 import org.apache.pig.ResourceSchema;
 import org.apache.pig.impl.util.UDFContext;
-
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.fs.Path;
@@ -38,21 +37,21 @@ import org.apache.hadoop.mapreduce.OutputFormat;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.RecordWriter; 
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
+import org.seqdoop.hadoop_bam.BAMOutputFormat;
+import org.seqdoop.hadoop_bam.BAMRecordWriter;
+import org.seqdoop.hadoop_bam.SAMRecordWritable;
+import org.seqdoop.hadoop_bam.KeyIgnoringBAMRecordWriter;
+import org.seqdoop.hadoop_bam.KeyIgnoringBAMOutputFormat;
 
-import fi.tkk.ics.hadoop.bam.BAMOutputFormat;
-import fi.tkk.ics.hadoop.bam.BAMRecordWriter;
-import fi.tkk.ics.hadoop.bam.SAMRecordWritable;
-import fi.tkk.ics.hadoop.bam.KeyIgnoringBAMRecordWriter;
-import fi.tkk.ics.hadoop.bam.KeyIgnoringBAMOutputFormat;
-
-import net.sf.samtools.SAMRecord;
-import net.sf.samtools.SAMFileHeader;
-import net.sf.samtools.SAMTextHeaderCodec;
-import net.sf.samtools.SAMTagUtil;
-import net.sf.samtools.SAMReadGroupRecord;
-import net.sf.samtools.SAMProgramRecord;
-import net.sf.samtools.SAMFileReader.ValidationStringency;
-import net.sf.samtools.util.StringLineReader;
+import htsjdk.samtools.SAMRecord;
+import htsjdk.samtools.SAMFileHeader;
+import htsjdk.samtools.SAMTextHeaderCodec;
+import htsjdk.samtools.SAMTagUtil;
+import htsjdk.samtools.SAMReadGroupRecord;
+import htsjdk.samtools.SAMProgramRecord;
+import htsjdk.samtools.ValidationStringency;
+//import htsjdk.samtools.SAMFileReader.ValidationStringency;
+import htsjdk.samtools.util.StringLineReader;
 
 import java.io.IOException;
 import java.util.ArrayList;

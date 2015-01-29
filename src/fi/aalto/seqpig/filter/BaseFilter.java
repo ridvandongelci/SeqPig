@@ -40,8 +40,8 @@ import java.lang.StringBuilder;
 import java.util.StringTokenizer;
 import java.io.IOException;
 
-import fi.tkk.ics.hadoop.bam.FormatConstants.BaseQualityEncoding;
-import fi.tkk.ics.hadoop.bam.FastqInputFormat;
+import org.seqdoop.hadoop_bam.FormatConstants.BaseQualityEncoding;
+import org.seqdoop.hadoop_bam.FastqInputFormat;
 
 public class BaseFilter extends EvalFunc<Tuple> {
 

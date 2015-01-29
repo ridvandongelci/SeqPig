@@ -53,9 +53,9 @@ import java.util.Properties;
 import java.util.ArrayList;
 import java.io.StringWriter;
 
-import fi.tkk.ics.hadoop.bam.FastqInputFormat;
-import fi.tkk.ics.hadoop.bam.FastqInputFormat.FastqRecordReader;
-import fi.tkk.ics.hadoop.bam.SequencedFragment;
+import org.seqdoop.hadoop_bam.FastqInputFormat;
+import org.seqdoop.hadoop_bam.FastqInputFormat.FastqRecordReader;
+import org.seqdoop.hadoop_bam.SequencedFragment;
 
 public class FastqLoader extends LoadFunc implements LoadMetadata {
     protected RecordReader in = null;

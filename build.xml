@@ -18,8 +18,11 @@
 	<path id="classpath">
 		<fileset dir="${lib.dir}" includes="**/*.jar"/>
 		<fileset id="hadoop_jars" dir="${env.HADOOP_HOME}">
-			<include name="hadoop-*.jar"/>
-			<include name="client/*.jar"/>
+			<include name="share/hadoop/yarn/*.jar"/>
+			<include name="share/hadoop/common/*.jar"/>
+			<include name="share/hadoop/common/lib/*.jar"/>
+			<include name="share/hadoop/mapreduce/*.jar"/>
+			<include name="share/hadoop/hdfs/*.jar"/>
 		</fileset>
 		<fileset id="pig_jars" dir="${env.PIG_HOME}">
 			<include name="pig*.jar"/>

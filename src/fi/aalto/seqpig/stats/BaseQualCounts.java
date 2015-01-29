@@ -29,7 +29,7 @@ import org.apache.pig.Algebraic;
 import org.apache.pig.backend.executionengine.ExecException;
 import org.apache.pig.impl.logicalLayer.schema.Schema;
 
-import fi.tkk.ics.hadoop.bam.FormatConstants;
+import org.seqdoop.hadoop_bam.FormatConstants;
 
 public class BaseQualCounts extends EvalFunc<Tuple> implements Algebraic, Accumulator<Tuple>
 {

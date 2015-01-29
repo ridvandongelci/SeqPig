@@ -53,9 +53,9 @@ import java.util.Properties;
 import java.util.ArrayList;
 import java.io.StringWriter;
 
-import fi.tkk.ics.hadoop.bam.QseqInputFormat;
-import fi.tkk.ics.hadoop.bam.QseqInputFormat.QseqRecordReader;
-import fi.tkk.ics.hadoop.bam.SequencedFragment;
+import org.seqdoop.hadoop_bam.QseqInputFormat;
+import org.seqdoop.hadoop_bam.QseqInputFormat.QseqRecordReader;
+import org.seqdoop.hadoop_bam.SequencedFragment;
 
 public class QseqLoader extends LoadFunc implements LoadMetadata {
     protected RecordReader in = null;
