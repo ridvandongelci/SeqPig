@@ -44,10 +44,11 @@ export SPARK_PIG_JAR=$PIG_HOME/pig-0.15.0-SNAPSHOT-core-h2.jar
 
 # Cluster settings
 export SPARK_EXECUTOR_CORES=4
-export SPARK_EXECUTOR_MEMORY=500m
-export SPARK_MEM=500m
-export SPARK_EXECUTOR_INSTANCES=1
-
+export SPARK_EXECUTOR_MEMORY=1200m
+export SPARK_MEM=1200m
+export SPARK_EXECUTOR_INSTANCES=4
+export SPARK_PARALLELISM=4;
+export SPARK_REPARTITION_LOAD=true
 #echo "${PIG_HOME}/bin/pig -x spark  ${@}"
 ${PIG_HOME}/bin/pig -x spark "$@"
 
