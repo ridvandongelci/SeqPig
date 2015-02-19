@@ -64,6 +64,7 @@ import org.apache.spark.rdd.PairRDDFunctions;
 import org.apache.spark.rdd.RDD;
 
 import scala.Tuple2;
+import scala.collection.Iterator;
 import scala.runtime.AbstractFunction1;
 import fi.tkk.ics.hadoop.bam.KeyIgnoringAnySAMOutputFormat;
 import fi.tkk.ics.hadoop.bam.SAMFormat;
@@ -438,8 +439,8 @@ public class SamStorer extends StoreFunc implements StoreSparkFunc {
 
 		FromTupleFunction FROM_TUPLE_FUNCTION = new FromTupleFunction(header,
 				allSAMFieldNames);
-		RDD<Tuple2<Text, SAMRecordWritable>> rddPairs = rdd.map(
-				FROM_TUPLE_FUNCTION,
+		RDD<Tuple2<Text, SAMRecordWritable>> rddPairs = rdd.mapPartitions(
+				FROM_TUPLE_FUNCTION, true,
 				SparkUtil.<Text, SAMRecordWritable> getTuple2Manifest());
 		PairRDDFunctions<Text, SAMRecordWritable> pairRDDFunctions = new PairRDDFunctions<Text, SAMRecordWritable>(
 				rddPairs, SparkUtil.getManifest(Text.class),
@@ -453,7 +454,7 @@ public class SamStorer extends StoreFunc implements StoreSparkFunc {
 	}
 
 	private static class FromTupleFunction extends
-			AbstractFunction1<Tuple, Tuple2<Text, SAMRecordWritable>> implements
+			AbstractFunction1<Iterator<Tuple>, Iterator<Tuple2<Text, SAMRecordWritable>>> implements
 			Serializable {
 
 		HashMap<String, Integer> allBAMFieldNames;
@@ -467,23 +468,31 @@ public class SamStorer extends StoreFunc implements StoreSparkFunc {
 
 		private static Text EMPTY_TEXT = new Text();
 
-		public Tuple2<Text, SAMRecordWritable> apply(Tuple v1) {
-			try {
+		@Override
+		public Iterator<Tuple2<Text, SAMRecordWritable>> apply(
+				Iterator<Tuple> input) {
+			return input.map(new AbstractFunction1<Tuple, Tuple2<Text, SAMRecordWritable>>() {
+				public Tuple2<Text, SAMRecordWritable> apply(Tuple v1) {
+					try {
 
-				final SAMTextHeaderCodec codec = new SAMTextHeaderCodec();
-				codec.setValidationStringency(ValidationStringency.SILENT);
-				SAMFileHeader samfileheader_decoded = codec.decode(
-						new StringLineReader(this.samfileheader),
-						"SAMFileHeader.clone");
-				SAMRecordWritable samrecwrite = tupleToSAMRecord(v1,
-						samfileheader_decoded, allBAMFieldNames);
-				return new Tuple2<Text, SAMRecordWritable>(EMPTY_TEXT,
-						samrecwrite);
-			} catch (ExecException e) {
-				e.printStackTrace();
-				throw new RuntimeException(e);
-			}
+						final SAMTextHeaderCodec codec = new SAMTextHeaderCodec();
+						codec.setValidationStringency(ValidationStringency.SILENT);
+						SAMFileHeader samfileheader_decoded = codec.decode(
+								new StringLineReader(FromTupleFunction.this.samfileheader),
+								"SAMFileHeader.clone");
+						SAMRecordWritable samrecwrite = tupleToSAMRecord(v1,
+								samfileheader_decoded, allBAMFieldNames);
+						return new Tuple2<Text, SAMRecordWritable>(EMPTY_TEXT,
+								samrecwrite);
+					} catch (ExecException e) {
+						e.printStackTrace();
+						throw new RuntimeException(e);
+					}
+				}
+			});
 		}
+
+		
 	}
 
 	public static String getSamFileHeaderFromHDFS(String samfileheaderfilename,

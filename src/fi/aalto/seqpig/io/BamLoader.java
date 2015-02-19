@@ -53,6 +53,7 @@ import org.apache.spark.SparkContext;
 import org.apache.spark.rdd.RDD;
 
 import scala.Tuple2;
+import scala.collection.Iterator;
 import scala.runtime.AbstractFunction1;
 import fi.tkk.ics.hadoop.bam.BAMInputFormat;
 import fi.tkk.ics.hadoop.bam.SAMRecordWritable;
@@ -87,7 +88,7 @@ public class BamLoader extends LoadFunc implements LoadMetadata, LoadSparkFunc {
 
 			SAMRecordWritable currentValue = (SAMRecordWritable) in
 					.getCurrentValue();
-			//Factored to incread usability
+			// Factored to incread usability
 			return SAMRecordToTuple(currentValue, loadAttributes);
 		} catch (InterruptedException e) {
 			int errCode = 6018;
@@ -98,7 +99,7 @@ public class BamLoader extends LoadFunc implements LoadMetadata, LoadSparkFunc {
 
 	}
 
-	//Static method create SAMRecord From Tuple
+	// Static method create SAMRecord From Tuple
 	private static Tuple SAMRecordToTuple(SAMRecordWritable currentValue,
 			boolean loadAttributes) {
 		SAMRecord samrec = currentValue.get();
@@ -210,23 +211,24 @@ public class BamLoader extends LoadFunc implements LoadMetadata, LoadSparkFunc {
 			throws IOException {
 		return null;
 	}
-	
-	//Spark StoreFunction Support
+
+	// Spark StoreFunction Support
 	@Override
 	public RDD<Tuple> getRDDfromContext(SparkContext sc, String path,
 			JobConf conf) throws IOException {
-		//Map  key value pairs to tuples by omitting LongWritable
+		// Map key value pairs to tuples by omitting LongWritable
 		RDD<Tuple2<LongWritable, SAMRecordWritable>> hadoopRDD = sc
 				.newAPIHadoopFile(path, BAMInputFormat.class,
 						LongWritable.class, SAMRecordWritable.class, conf);
 
 		ToTupleFunction TO_TUPLE_FUNCTION = new ToTupleFunction(loadAttributes);
-		return hadoopRDD.map(TO_TUPLE_FUNCTION,
+		return hadoopRDD.mapPartitions(TO_TUPLE_FUNCTION, true,
 				SparkUtil.getManifest(Tuple.class));
 	}
 
-	private static class ToTupleFunction extends
-			AbstractFunction1<Tuple2<LongWritable, SAMRecordWritable>, Tuple>
+	private static class ToTupleFunction
+			extends
+			AbstractFunction1<Iterator<Tuple2<LongWritable, SAMRecordWritable>>, Iterator<Tuple>>
 			implements Serializable {
 
 		boolean loadAttributes = false;
@@ -236,8 +238,16 @@ public class BamLoader extends LoadFunc implements LoadMetadata, LoadSparkFunc {
 		}
 
 		@Override
-		public Tuple apply(Tuple2<LongWritable, SAMRecordWritable> v1) {
-			return SAMRecordToTuple(v1._2(), loadAttributes);
+		public Iterator<Tuple> apply(
+				Iterator<Tuple2<LongWritable, SAMRecordWritable>> input) {
+			AbstractFunction1<Tuple2<LongWritable, SAMRecordWritable>, Tuple> abstractFunction1 = new AbstractFunction1<Tuple2<LongWritable, SAMRecordWritable>, Tuple>() {
+				@Override
+				public Tuple apply(Tuple2<LongWritable, SAMRecordWritable> v1) {
+					return SAMRecordToTuple(v1._2(), loadAttributes);
+				}
+			};
+			return input.map(abstractFunction1);
 		}
+
 	}
 }

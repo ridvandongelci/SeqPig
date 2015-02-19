@@ -48,6 +48,7 @@ import org.apache.spark.SparkContext;
 import org.apache.spark.rdd.RDD;
 
 import scala.Tuple2;
+import scala.collection.Iterator;
 import scala.runtime.AbstractFunction1;
 import fi.tkk.ics.hadoop.bam.FastqInputFormat;
 import fi.tkk.ics.hadoop.bam.FastqInputFormat.FastqRecordReader;
@@ -76,27 +77,29 @@ public class FastqLoader extends LoadFunc implements LoadMetadata, LoadSparkFunc
 
     public FastqLoader() {}
 
-    @Override
-    public Tuple getNext() throws IOException {
-        try {
-        	
-            boolean notDone = in.nextKeyValue();
-            if (!notDone) {
-                return null;
-            }
+	@Override
+	public Tuple getNext() throws IOException {
+		try {
 
-            Text fastqrec_name = ((FastqRecordReader)in).getCurrentKey();
-            SequencedFragment fastqrec = ((FastqRecordReader)in).getCurrentValue();
-	   
-	    //mProtoTuple.add(new String(fastqrec_name.toString()));
-	    //Refactoring for reusability
-	    return sequencedFragmentToTuple(fastqrec);
-        } catch (InterruptedException e) {
-            int errCode = 6018;
-            String errMsg = "Error while reading Fastq input: check data format! (Casava 1.8?)";
-            throw new ExecException(errMsg, errCode, PigException.REMOTE_ENVIRONMENT, e);
-        }
-    }
+			boolean notDone = in.nextKeyValue();
+			if (!notDone) {
+				return null;
+			}
+
+			Text fastqrec_name = ((FastqRecordReader) in).getCurrentKey();
+			SequencedFragment fastqrec = ((FastqRecordReader) in)
+					.getCurrentValue();
+
+			// mProtoTuple.add(new String(fastqrec_name.toString()));
+			// Refactoring for reusability
+			return sequencedFragmentToTuple(fastqrec);
+		} catch (InterruptedException e) {
+			int errCode = 6018;
+			String errMsg = "Error while reading Fastq input: check data format! (Casava 1.8?)";
+			throw new ExecException(errMsg, errCode,
+					PigException.REMOTE_ENVIRONMENT, e);
+		}
+	}
 
 	private static Tuple sequencedFragmentToTuple(SequencedFragment fastqrec) {
 
@@ -180,17 +183,30 @@ public class FastqLoader extends LoadFunc implements LoadMetadata, LoadSparkFunc
 						Text.class, SequencedFragment.class, conf);
 		
 		ToTupleFunction TO_TUPLE_FUNCTION = new ToTupleFunction();
-		return hadoopRDD.map(TO_TUPLE_FUNCTION,
+		return hadoopRDD.mapPartitions(TO_TUPLE_FUNCTION, true,
 				SparkUtil.getManifest(Tuple.class));
 	}
-	
-	private static class ToTupleFunction extends
-			AbstractFunction1<Tuple2<Text, SequencedFragment>, Tuple>
+
+	private static class ToTupleFunction
+			extends
+			AbstractFunction1<Iterator<Tuple2<Text, SequencedFragment>>, Iterator<Tuple>>
 			implements Serializable {
 
-		@Override
-		public Tuple apply(Tuple2<Text, SequencedFragment> v1) {
-			return sequencedFragmentToTuple(v1._2());
+		public ToTupleFunction() {
+
 		}
+
+		@Override
+		public Iterator<Tuple> apply(
+				Iterator<Tuple2<Text, SequencedFragment>> input) {
+			AbstractFunction1<Tuple2<Text, SequencedFragment>, Tuple> abstractFunction1 = new AbstractFunction1<Tuple2<Text, SequencedFragment>, Tuple>() {
+				@Override
+				public Tuple apply(Tuple2<Text, SequencedFragment> v1) {
+					return sequencedFragmentToTuple(v1._2());
+				}
+			};
+			return input.map(abstractFunction1);
+		}
+
 	}
 }

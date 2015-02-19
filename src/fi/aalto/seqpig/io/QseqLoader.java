@@ -49,6 +49,7 @@ import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
 import org.apache.hadoop.io.Text;
 
 import scala.Tuple2;
+import scala.collection.Iterator;
 import scala.runtime.AbstractFunction1;
 
 import java.io.IOException;
@@ -204,17 +205,25 @@ public class QseqLoader extends LoadFunc implements LoadMetadata, LoadSparkFunc 
 				SequencedFragment.class, conf);
 
 		ToTupleFunction TO_TUPLE_FUNCTION = new ToTupleFunction();
-		return hadoopRDD.map(TO_TUPLE_FUNCTION,
+		return hadoopRDD.mapPartitions(TO_TUPLE_FUNCTION, true,
 				SparkUtil.getManifest(Tuple.class));
 	}
 
 	private static class ToTupleFunction extends
-			AbstractFunction1<Tuple2<Text, SequencedFragment>, Tuple> implements
+			AbstractFunction1<Iterator<Tuple2<Text, SequencedFragment>>, Iterator<Tuple>> implements
 			Serializable {
 
 		@Override
-		public Tuple apply(Tuple2<Text, SequencedFragment> v1) {
-			return sequencedFragmentToTuple(v1._2());
+		public Iterator<Tuple> apply(
+				Iterator<Tuple2<Text, SequencedFragment>> input) {
+			return input.map(new AbstractFunction1<Tuple2<Text,SequencedFragment>, Tuple>() {
+				@Override
+				public Tuple apply(Tuple2<Text, SequencedFragment> v1) {
+					return sequencedFragmentToTuple(v1._2());
+				}
+			});
 		}
+
+		
 	}
 }

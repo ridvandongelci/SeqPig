@@ -69,6 +69,7 @@ import fi.tkk.ics.hadoop.bam.SequencedFragment;
 import org.apache.commons.codec.binary.Base64;
 
 import scala.Tuple2;
+import scala.collection.Iterator;
 import scala.runtime.AbstractFunction1;
 
 public class QseqStorer extends StoreFunc implements StoreSparkFunc {
@@ -302,8 +303,8 @@ public class QseqStorer extends StoreFunc implements StoreSparkFunc {
 
 		FromTupleFunction FROM_TUPLE_FUNCTION = new FromTupleFunction(
 				allQseqFieldNames);
-		RDD<Tuple2<Text, SequencedFragment>> rddPairs = rdd.map(
-				FROM_TUPLE_FUNCTION,
+		RDD<Tuple2<Text, SequencedFragment>> rddPairs = rdd.mapPartitions(
+				FROM_TUPLE_FUNCTION, true,
 				SparkUtil.<Text, SequencedFragment> getTuple2Manifest());
 		PairRDDFunctions<Text, SequencedFragment> pairRDDFunctions = new PairRDDFunctions<Text, SequencedFragment>(
 				rddPairs, SparkUtil.getManifest(Text.class),
@@ -313,7 +314,7 @@ public class QseqStorer extends StoreFunc implements StoreSparkFunc {
 	}
 
 	private static class FromTupleFunction extends
-			AbstractFunction1<Tuple, Tuple2<Text, SequencedFragment>> implements
+			AbstractFunction1<Iterator<Tuple>, Iterator<Tuple2<Text, SequencedFragment>>> implements
 			Serializable {
 
 		private static Text EMPTY_TEXT = new Text();
@@ -323,15 +324,24 @@ public class QseqStorer extends StoreFunc implements StoreSparkFunc {
 			this.allQseqFieldNames = allFastqFieldNames;
 		}
 
-		public Tuple2<Text, SequencedFragment> apply(Tuple v1) {
-			try {
+		@Override
+		public Iterator<Tuple2<Text, SequencedFragment>> apply(
+				Iterator<Tuple> input) {
+			
+			return input.map(new AbstractFunction1<Tuple, Tuple2<Text, SequencedFragment>>() {
+				public Tuple2<Text, SequencedFragment> apply(Tuple v1) {
+					try {
 
-				return new Tuple2<Text, SequencedFragment>(EMPTY_TEXT,
-						tupleToSequencedFragment(v1, allQseqFieldNames));
-			} catch (ExecException e) {
-				e.printStackTrace();
-				throw new RuntimeException(e);
-			}
+						return new Tuple2<Text, SequencedFragment>(EMPTY_TEXT,
+								tupleToSequencedFragment(v1, allQseqFieldNames));
+					} catch (ExecException e) {
+						e.printStackTrace();
+						throw new RuntimeException(e);
+					}
+				}
+			});
 		}
+
+		
 	}
 }
